@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
@@ -28,13 +29,15 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.emirtechs.myjourneys.databinding.ActivityMapsBinding;
 import com.google.android.material.snackbar.Snackbar;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMapLongClickListener {
 
     private GoogleMap mMap;
     private ActivityMapsBinding binding;
     LocationManager locationManager;
     LocationListener locationListener;
     ActivityResultLauncher<String> resultLauncher;
+    SharedPreferences sharedPreferences;
+    boolean info;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,7 +53,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
 
         registerLauncher();
-
+        sharedPreferences = MapsActivity.this.getSharedPreferences("com.emirtechs.myjourneys", MODE_PRIVATE);
+        info = false;
 
     }
 
@@ -58,14 +62,22 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
+        mMap.setOnMapLongClickListener(this);
         locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
 
         locationListener = new LocationListener() {
             @Override
             public void onLocationChanged(@NonNull Location location) {
-                System.out.println("Location: " + location);
 
+
+                info = sharedPreferences.getBoolean("info", false);
+
+                if (!info) {
+                    LatLng user = new LatLng(location.getLatitude(), location.getLongitude());
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(user, 15));
+                    sharedPreferences.edit().putBoolean("info", true).apply();
+
+                }
             }
         };
 
@@ -83,11 +95,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         } else {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+
+            Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (lastLocation != null) {
+                LatLng lastUserLocation = new LatLng(lastLocation.getLatitude(), lastLocation.getLongitude());
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(lastUserLocation, 15));
+            }
+            mMap.setMyLocationEnabled(true);
+
         }
 
-        LatLng eiffel = new LatLng(48.8583736, 2.2922873);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(eiffel, 15));
-        mMap.addMarker(new MarkerOptions().position(eiffel).title("Eiffel Tower"));
+
     }
 
     private void registerLauncher() {
@@ -96,13 +114,26 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             public void onActivityResult(Boolean result) {
                 if (result) {
 
-                    if (ContextCompat.checkSelfPermission(MapsActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                    if (ContextCompat.checkSelfPermission(MapsActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+                        Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                        if (lastLocation != null) {
+                            LatLng lastUserLocation = new LatLng(lastLocation.getLatitude(), lastLocation.getLongitude());
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(lastUserLocation, 15));
+                        }
+                    }
                 } else {
 
                     Toast.makeText(MapsActivity.this, "Permission Needed", Toast.LENGTH_SHORT).show();
                 }
             }
         });
+    }
+
+    @Override
+    public void onMapLongClick(LatLng latLng) {
+        mMap.clear();
+        mMap.addMarker(new MarkerOptions().position(latLng));
+
     }
 }
